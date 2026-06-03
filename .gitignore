@@ -48,3 +48,10 @@ linux/
 macos/
 web/
 windows/
+
+# Platform tidak dipakai
+ios/
+linux/
+macos/
+web/
+windows/

@@ -1,68 +1,173 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../constants/firestore_schema.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+
+import 'app_constants.dart';
 import 'firebase_options.dart';
-import 'services/auth_service.dart';
-import 'screens/auth/login_screen.dart';
-import 'widgets/bottom_nav_bar.dart';
+import 'navigation_shell.dart';
+import 'screens/auth_screen.dart';
+import 'screens/challenge_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/risk_screen.dart';
+import 'screens/sugar_log_screen.dart';
+import 'services/notification_service.dart';
 
-void main() async {
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  runApp(const SugarPalsApp());
+  await initializeDateFormatting('id_ID');
+  Intl.defaultLocale = 'id_ID';
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  await NotificationService.instance.initialize();
+
+  runApp(const GulaDarahkuApp());
 }
 
-Future<void> seedChallenges() async {
-  final db = FirebaseFirestore.instance;
-
-  // Cek dulu apakah sudah ada data
-  final existing = await db.collection(FSCollection.challenges).limit(1).get();
-  if (existing.docs.isNotEmpty) {
-    print('Challenges sudah ada, skip seed.');
-    return;
-  }
-
-  final challenges = [
-    {FSField.title: '7 Hari Tanpa Boba',       FSField.description: 'Hindari minuman manis selama 7 hari',          FSField.targetSugarGram: 30, FSField.durationDays: 7,  FSField.badgeIcon: 'cup_off'},
-    {FSField.title: 'Minggu Sehat',             FSField.description: 'Jaga gula di bawah 50g setiap hari',           FSField.targetSugarGram: 50, FSField.durationDays: 7,  FSField.badgeIcon: 'leaf'},
-    {FSField.title: 'Tantangan 3 Hari',         FSField.description: 'Konsumsi gula di bawah 25g per hari',          FSField.targetSugarGram: 25, FSField.durationDays: 3,  FSField.badgeIcon: 'star'},
-    {FSField.title: 'Diet Gula 14 Hari',        FSField.description: 'Konsistensi 2 minggu dengan batas 40g/hari',   FSField.targetSugarGram: 40, FSField.durationDays: 14, FSField.badgeIcon: 'trophy'},
-    {FSField.title: 'Detoks Weekend',           FSField.description: 'Gula di bawah 20g di Sabtu dan Minggu',        FSField.targetSugarGram: 20, FSField.durationDays: 2,  FSField.badgeIcon: 'heart'},
-  ];
-
-  for (final c in challenges) {
-    await db.collection(FSCollection.challenges).add(c);
-  }
-  print('Seed selesai — ${challenges.length} tantangan ditambahkan.');
-}
-
-class SugarPalsApp extends StatelessWidget {
-  const SugarPalsApp({super.key});
+class GulaDarahkuApp extends StatelessWidget {
+  const GulaDarahkuApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SugarPals',
+      title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF147A65),
+          primary: const Color(0xFF147A65),
+          secondary: const Color(0xFF2764A7),
+          tertiary: const Color(0xFFC8752E),
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF7FAF9),
+        appBarTheme: const AppBarTheme(centerTitle: false),
       ),
-      // Cek status login — kalau sudah login langsung ke home
-      home: StreamBuilder(
-        stream: AuthService().authStateChanges,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (snapshot.hasData) return const BottomNavBar();
-          return const LoginScreen();
-        },
+      home: const AuthGate(),
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashPanel(message: 'Menyiapkan sesi...');
+        }
+        final user = snapshot.data;
+        if (user == null) return const AuthScreen();
+        return ProfileGate(user: user);
+      },
+    );
+  }
+}
+
+class ProfileGate extends StatefulWidget {
+  const ProfileGate({super.key, required this.user});
+
+  final User user;
+
+  @override
+  State<ProfileGate> createState() => _ProfileGateState();
+}
+
+class _ProfileGateState extends State<ProfileGate> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(NotificationService.instance.syncToken(widget.user.uid));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final doc = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.user.uid);
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: doc.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashPanel(message: 'Mengambil profil...');
+        }
+        final data = snapshot.data?.data();
+        if (data == null || data['profileCompleted'] != true) {
+          return OnboardingScreen(user: widget.user);
+        }
+        return GulaNavigationShell(
+          tabs: [
+            NavigationTab(
+              label: 'Beranda',
+              icon: Icons.dashboard_outlined,
+              selectedIcon: Icons.dashboard,
+              child: HomeScreen(user: widget.user),
+            ),
+            NavigationTab(
+              label: 'Risiko',
+              icon: Icons.health_and_safety_outlined,
+              selectedIcon: Icons.health_and_safety,
+              child: RiskScreen(user: widget.user),
+            ),
+            NavigationTab(
+              label: 'Log Gula',
+              icon: Icons.restaurant_menu_outlined,
+              selectedIcon: Icons.restaurant_menu,
+              child: SugarLogScreen(user: widget.user),
+            ),
+            NavigationTab(
+              label: 'Tantangan',
+              icon: Icons.emoji_events_outlined,
+              selectedIcon: Icons.emoji_events,
+              child: ChallengeScreen(user: widget.user),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class SplashPanel extends StatelessWidget {
+  const SplashPanel({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(message),
+          ],
+        ),
       ),
     );
   }

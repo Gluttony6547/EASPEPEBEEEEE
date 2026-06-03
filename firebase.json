@@ -1,1 +1,5 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"sugarpals-20569","appId":"1:230677489732:android:bca3084aca8f6c0f7cf411","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"sugarpals-20569","configurations":{"android":"1:230677489732:android:bca3084aca8f6c0f7cf411","ios":"1:230677489732:ios:891a2c3a6c49f1d37cf411","macos":"1:230677489732:ios:891a2c3a6c49f1d37cf411","web":"1:230677489732:web:18e545e43a4a780b7cf411","windows":"1:230677489732:web:ddbd38c2378087717cf411"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

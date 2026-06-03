@@ -17,17 +17,29 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      return web;
+      throw UnsupportedError(
+        'DefaultFirebaseOptions have not been configured for web - '
+        'you can reconfigure this by running the FlutterFire CLI again.',
+      );
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        return ios;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for ios - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.macOS:
-        return macos;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for macos - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.windows:
-        return windows;
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for windows - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -40,47 +52,11 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBDZ6ntU8g-dMPjZ_SXPe4LQjPky0e0Tfo',
-    appId: '1:230677489732:web:18e545e43a4a780b7cf411',
-    messagingSenderId: '230677489732',
-    projectId: 'sugarpals-20569',
-    authDomain: 'sugarpals-20569.firebaseapp.com',
-    storageBucket: 'sugarpals-20569.firebasestorage.app',
-  );
-
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDahfohLUIDUwZ-hoLaWGIDoXGCa6U_C-o',
-    appId: '1:230677489732:android:bca3084aca8f6c0f7cf411',
-    messagingSenderId: '230677489732',
-    projectId: 'sugarpals-20569',
-    storageBucket: 'sugarpals-20569.firebasestorage.app',
-  );
-
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCWdfyc0gtDp9lLAzM6bkIzbbBSnNKYki0',
-    appId: '1:230677489732:ios:891a2c3a6c49f1d37cf411',
-    messagingSenderId: '230677489732',
-    projectId: 'sugarpals-20569',
-    storageBucket: 'sugarpals-20569.firebasestorage.app',
-    iosBundleId: 'com.example.sugarpals',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyCWdfyc0gtDp9lLAzM6bkIzbbBSnNKYki0',
-    appId: '1:230677489732:ios:891a2c3a6c49f1d37cf411',
-    messagingSenderId: '230677489732',
-    projectId: 'sugarpals-20569',
-    storageBucket: 'sugarpals-20569.firebasestorage.app',
-    iosBundleId: 'com.example.sugarpals',
-  );
-
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBDZ6ntU8g-dMPjZ_SXPe4LQjPky0e0Tfo',
-    appId: '1:230677489732:web:ddbd38c2378087717cf411',
-    messagingSenderId: '230677489732',
-    projectId: 'sugarpals-20569',
-    authDomain: 'sugarpals-20569.firebaseapp.com',
-    storageBucket: 'sugarpals-20569.firebasestorage.app',
+    apiKey: 'AIzaSyA0WrVLDc8StVJ827mIQKk6-8DRu7ANR_k',
+    appId: '1:681750103043:android:2592edb20653934c18ba36',
+    messagingSenderId: '681750103043',
+    projectId: 'eeeaaasspepebe',
+    storageBucket: 'eeeaaasspepebe.firebasestorage.app',
   );
 }
