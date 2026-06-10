@@ -27,7 +27,7 @@ Setiap anggota hanya boleh mengedit file di dalam folder miliknya sendiri tanpa 
 
 ```
 azka → lib/screens/assessment/
-maufal → lib/screens/sugar_log/
+naufal → lib/screens/sugar_log/
 dea → lib/screens/challenge/
 ```
 
