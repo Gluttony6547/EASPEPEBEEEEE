@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../services/notification_service.dart';
 
 import '../../app_constants.dart';
 
@@ -50,6 +51,16 @@ class ChallengeScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final docs = snapshot.data?.docs ?? [];
+
+          // Schedule/cancel reminder berdasarkan ada tidaknya challenge aktif
+          final activeDocs = docs.where((d) => d.data()['status'] == 'active').toList();
+          if (activeDocs.isNotEmpty) {
+            final activeTitle = activeDocs.first.data()['title']?.toString() ?? 'Challenge';
+            NotificationService.instance.scheduleEveningReminder(activeTitle);
+          } else {
+            NotificationService.instance.cancelEveningReminder();
+          }
+
           if (docs.isEmpty) return const _EmptyChallengeState();
 
           return ListView.separated(
@@ -523,6 +534,10 @@ Future<void> recalculateActiveChallenges(
 
     final newStatus = credited.length >= durationDays ? 'completed' : 'active';
 
+// Ambil progressDays sebelumnya untuk deteksi perubahan
+    final prevProgress = (data['progressDays'] as num?)?.toInt() ?? 0;
+    final prevStatus = data['status']?.toString() ?? 'active';
+
     await doc.reference.update({
       'creditedDates': credited,
       'failedDates': failed,
@@ -532,5 +547,21 @@ Future<void> recalculateActiveChallenges(
       if (newStatus == 'completed')
         'completedAt': FieldValue.serverTimestamp(),
     });
+
+    final title = data['title']?.toString() ?? 'Challenge';
+
+    // Notif: challenge baru saja selesai
+    if (newStatus == 'completed' && prevStatus != 'completed') {
+      await NotificationService.instance.showChallengeCompleted(title);
+    }
+
+    // Notif: streak bertambah hari ini
+    else if (credited.length > prevProgress) {
+      await NotificationService.instance.showChallengeStreakSuccess(
+        title,
+        credited.length,
+        durationDays,
+      );
+    }
   }
 }
