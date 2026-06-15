@@ -18,7 +18,7 @@ import 'screens/challenge/challenge_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/risk_screen.dart';
-import 'screens/sugar_log_screen.dart';
+import 'screens/sugar_log/sugar_log_screen.dart';
 import 'services/notification_service.dart';
 
 @pragma('vm:entry-point')
