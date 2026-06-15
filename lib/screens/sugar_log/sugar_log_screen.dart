@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import '../../app_constants.dart';
 import '../../domain/health_logic.dart';
 import '../../services/notification_service.dart';
-import '../../services/open_food_facts_service.dart';
+import '../../services/nutrition_lookup_service.dart';
 
 class SugarLogScreen extends StatelessWidget {
   const SugarLogScreen({super.key, required this.user});
@@ -98,10 +98,16 @@ class SugarLogScreen extends StatelessWidget {
       builder: (context) => _BarcodeDialog(),
     );
     if (barcode == null || barcode.trim().isEmpty || !context.mounted) return;
+    if (!isValidNutritionBarcode(barcode)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Barcode harus 8-14 digit angka.')),
+      );
+      return;
+    }
 
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final product = await OpenFoodFactsService().fetchProduct(barcode);
+      final product = await NutritionLookupService().fetchProduct(barcode);
       if (!context.mounted) return;
       if (product == null) {
         messenger.showSnackBar(
@@ -119,7 +125,7 @@ class SugarLogScreen extends StatelessWidget {
     BuildContext context, {
     String? existingId,
     Map<String, dynamic>? existingData,
-    FoodProduct? product,
+    NutritionProduct? product,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -232,31 +238,64 @@ class _SugarLogTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final date = (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
     final sugar = (data['sugarGram'] as num?)?.toDouble() ?? 0;
+    final confidence = (data['nutritionConfidence'] as num?)?.toDouble();
+    final needsReview = data['needsNutritionReview'] == true;
+    final manualAdjusted = data['manualAdjusted'] == true;
+    final source = _nutritionSourceLabel(
+      data['nutritionSource']?.toString() ?? data['source']?.toString(),
+    );
+
     return Card(
-      child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.local_cafe_outlined)),
-        title: Text(data['productName']?.toString() ?? 'Produk'),
-        subtitle: Text(
-          '${DateFormat('d MMM yyyy').format(date)} - ${data['source'] ?? 'manual'}',
-        ),
-        trailing: Wrap(
-          spacing: 4,
-          children: [
-            Text(
-              '${sugar.toStringAsFixed(1)}g',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            IconButton(
-              tooltip: 'Edit',
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              tooltip: 'Hapus',
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ],
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: ListTile(
+          leading: const CircleAvatar(child: Icon(Icons.local_cafe_outlined)),
+          title: Text(data['productName']?.toString() ?? 'Produk'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${DateFormat('d MMM yyyy').format(date)} - $source'),
+              if (confidence != null)
+                Text('Confidence ${(confidence * 100).round()}%'),
+              if (needsReview || manualAdjusted)
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    if (needsReview)
+                      const Chip(
+                        label: Text('Perlu cek'),
+                        avatar: Icon(Icons.warning_amber, size: 18),
+                      ),
+                    if (manualAdjusted)
+                      const Chip(
+                        label: Text('Manual'),
+                        avatar: Icon(Icons.edit_note, size: 18),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+          trailing: Wrap(
+            spacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '${sugar.toStringAsFixed(1)}g',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              IconButton(
+                tooltip: 'Edit',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              IconButton(
+                tooltip: 'Hapus',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -284,7 +323,7 @@ class _EmptySugarState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Tambah manual atau cari produk dari barcode Open Food Facts.',
+            'Tambah manual atau cari produk dari barcode.',
             textAlign: TextAlign.center,
           ),
         ],
@@ -338,7 +377,7 @@ class _SugarLogFormSheet extends StatefulWidget {
   final CollectionReference<Map<String, dynamic>> logs;
   final String? existingId;
   final Map<String, dynamic>? existingData;
-  final FoodProduct? product;
+  final NutritionProduct? product;
 
   @override
   State<_SugarLogFormSheet> createState() => _SugarLogFormSheetState();
@@ -373,7 +412,11 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
     _servingController = TextEditingController(
       text: data['serving']?.toString() ?? '1 porsi',
     );
-    _date = (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final existingDate = (data['date'] as Timestamp?)?.toDate();
+    final now = DateTime.now();
+    _date = existingDate == null || existingDate.isAfter(now)
+        ? now
+        : existingDate;
   }
 
   @override
@@ -389,34 +432,65 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 
-    final payload = {
-      'date': Timestamp.fromDate(_date),
-      'dayKey': dayKey(_date),
-      'productName': _productController.text.trim(),
-      'barcode': _barcodeController.text.trim(),
-      'sugarGram': double.parse(_sugarController.text),
-      'serving': _servingController.text.trim(),
-      'source':
-          widget.product == null &&
-              (widget.existingData?['source']?.toString() != 'open_food_facts')
-          ? 'manual'
-          : 'open_food_facts',
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    try {
+      final sugar = _parseLocalizedDouble(_sugarController.text)!;
+      final suggestedSugar = widget.product?.suggestedSugarGram;
+      final previousManualAdjusted =
+          widget.existingData?['manualAdjusted'] == true;
+      final manualAdjusted = widget.product == null
+          ? previousManualAdjusted
+          : _isManualAdjustment(sugar, suggestedSugar);
 
-    if (widget.existingId == null) {
-      await widget.logs.add({
-        ...payload,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } else {
-      await widget.logs.doc(widget.existingId).update(payload);
+      final payload = {
+        'date': Timestamp.fromDate(_date),
+        'dayKey': dayKey(_date),
+        'productName': _productController.text.trim(),
+        'barcode': _barcodeController.text.trim(),
+        'sugarGram': sugar,
+        'serving': _servingController.text.trim(),
+        'source': widget.product == null
+            ? (widget.existingData?['source']?.toString() ?? 'manual')
+            : 'barcode',
+        'nutritionSource':
+            widget.product?.source ??
+            widget.existingData?['nutritionSource']?.toString() ??
+            widget.existingData?['source']?.toString() ??
+            'manual',
+        'nutritionConfidence':
+            widget.product?.confidence ??
+            (widget.existingData?['nutritionConfidence'] as num?)?.toDouble(),
+        'needsNutritionReview':
+            widget.product?.needsReview ??
+            (widget.existingData?['needsNutritionReview'] == true),
+        'manualAdjusted': manualAdjusted,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (widget.existingId == null) {
+        await widget.logs.add({
+          ...payload,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await widget.logs.doc(widget.existingId).update(payload);
+      }
+
+      await recalculateActiveChallenges(widget.userDoc);
+      await _maybeShowWarning();
+
+      if (mounted) Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
 
-    await recalculateActiveChallenges(widget.userDoc);
-    await _maybeShowWarning();
-
-    if (mounted) Navigator.pop(context);
+  bool _isManualAdjustment(double sugar, double? suggestedSugar) {
+    return suggestedSugar != null && (sugar - suggestedSugar).abs() > 0.05;
   }
 
   Future<void> _maybeShowWarning() async {
@@ -457,7 +531,19 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
               ),
               if (widget.product != null) ...[
                 const SizedBox(height: 8),
-                Text('Open Food Facts: ${widget.product!.brand}'),
+                Text(
+                  '${widget.product!.sourceLabel}: ${widget.product!.brand}',
+                ),
+                Text(
+                  'Confidence ${(widget.product!.confidence * 100).round()}%',
+                ),
+                if (widget.product!.needsReview)
+                  Text(
+                    'Data antar-sumber perlu dicek ulang sebelum disimpan.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
               ],
               const SizedBox(height: 16),
               TextFormField(
@@ -476,7 +562,9 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
                   Expanded(
                     child: TextFormField(
                       controller: _sugarController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
                         labelText: 'Gula (gram)',
                         prefixIcon: Icon(Icons.scale_outlined),
@@ -538,7 +626,7 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
       context: context,
       initialDate: _date,
       firstDate: DateTime(2024),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: DateTime.now(),
     );
     if (selected != null) setState(() => _date = selected);
   }
@@ -590,7 +678,32 @@ Future<void> recalculateActiveChallenges(
 }
 
 String? _positiveNumberValidator(String? value) {
-  final number = double.tryParse(value ?? '');
-  if (number == null || number < 0) return 'Masukkan angka valid.';
+  final number = _parseLocalizedDouble(value);
+  if (number == null || number <= 0) return 'Masukkan angka valid.';
   return null;
+}
+
+double? _parseLocalizedDouble(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) return null;
+  return double.tryParse(text.replaceAll(',', '.'));
+}
+
+String _nutritionSourceLabel(String? source) {
+  return (source ?? 'manual')
+      .split('+')
+      .map(
+        (item) => switch (item) {
+          'c0r' => 'c0r.ai',
+          'calorie_api' => 'CalorieAPI',
+          'usda_fdc' => 'USDA FDC',
+          'edamam' => 'Edamam',
+          'open_food_facts' => 'Open Food Facts',
+          'open_food_facts_client' => 'Open Food Facts',
+          'barcode' => 'Barcode',
+          'manual' => 'Manual',
+          _ => item,
+        },
+      )
+      .join(' + ');
 }
