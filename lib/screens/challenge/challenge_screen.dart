@@ -2,9 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../services/notification_service.dart';
 
-import '../app_constants.dart';
-import 'sugar_log/sugar_log_screen.dart';
+import '../../app_constants.dart';
 
 class ChallengeScreen extends StatelessWidget {
   const ChallengeScreen({super.key, required this.user});
@@ -51,6 +51,18 @@ class ChallengeScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final docs = snapshot.data?.docs ?? [];
+
+          // Schedule/cancel reminder berdasarkan ada tidaknya challenge aktif
+          final activeDocs =
+              docs.where((d) => d.data()['status'] == 'active').toList();
+          if (activeDocs.isNotEmpty) {
+            final activeTitle =
+                activeDocs.first.data()['title']?.toString() ?? 'Challenge';
+            NotificationService.instance.scheduleEveningReminder(activeTitle);
+          } else {
+            NotificationService.instance.cancelEveningReminder();
+          }
+
           if (docs.isEmpty) return const _EmptyChallengeState();
 
           return ListView.separated(
@@ -62,11 +74,12 @@ class ChallengeScreen extends StatelessWidget {
               return _ChallengeCard(
                 id: doc.id,
                 data: doc.data(),
-                onEdit: () => _showChallengeForm(
-                  context,
-                  existingId: doc.id,
-                  existingData: doc.data(),
-                ),
+                onEdit:
+                    () => _showChallengeForm(
+                      context,
+                      existingId: doc.id,
+                      existingData: doc.data(),
+                    ),
                 onCancel: () => _cancelChallenge(context, doc.id),
                 onDelete: () => _deleteChallenge(context, doc.id, doc.data()),
               );
@@ -85,11 +98,12 @@ class ChallengeScreen extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _ChallengeFormSheet(
-        collection: _collection,
-        existingId: existingId,
-        existingData: existingData,
-      ),
+      builder:
+          (context) => _ChallengeFormSheet(
+            collection: _collection,
+            existingId: existingId,
+            existingData: existingData,
+          ),
     );
   }
 
@@ -115,23 +129,24 @@ class ChallengeScreen extends StatelessWidget {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus challenge?'),
-        content: const Text(
-          'Challenge nonaktif ini akan dihapus dari Firestore.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Hapus challenge?'),
+            content: const Text(
+              'Challenge nonaktif ini akan dihapus dari Firestore.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                icon: const Icon(Icons.delete),
+                label: const Text('Hapus'),
+              ),
+            ],
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.delete),
-            label: const Text('Hapus'),
-          ),
-        ],
-      ),
     );
     if (confirmed == true) await _collection.doc(id).delete();
   }
@@ -203,31 +218,32 @@ class _ChallengeCard extends StatelessWidget {
                     if (value == 'cancel') onCancel();
                     if (value == 'delete') onDelete();
                   },
-                  itemBuilder: (context) => [
-                    if (status == 'active')
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: ListTile(
-                          leading: Icon(Icons.edit_outlined),
-                          title: Text('Edit'),
+                  itemBuilder:
+                      (context) => [
+                        if (status == 'active')
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: ListTile(
+                              leading: Icon(Icons.edit_outlined),
+                              title: Text('Edit'),
+                            ),
+                          ),
+                        if (status == 'active')
+                          const PopupMenuItem(
+                            value: 'cancel',
+                            child: ListTile(
+                              leading: Icon(Icons.cancel_outlined),
+                              title: Text('Cancel'),
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            leading: Icon(Icons.delete_outline),
+                            title: Text('Delete'),
+                          ),
                         ),
-                      ),
-                    if (status == 'active')
-                      const PopupMenuItem(
-                        value: 'cancel',
-                        child: ListTile(
-                          leading: Icon(Icons.cancel_outlined),
-                          title: Text('Cancel'),
-                        ),
-                      ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: ListTile(
-                        leading: Icon(Icons.delete_outline),
-                        title: Text('Delete'),
-                      ),
-                    ),
-                  ],
+                      ],
                 ),
               ],
             ),
@@ -401,9 +417,11 @@ class _ChallengeFormSheetState extends State<_ChallengeFormSheet> {
                   labelText: 'Judul challenge',
                   prefixIcon: Icon(Icons.emoji_events_outlined),
                 ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Wajib diisi.'
-                    : null,
+                validator:
+                    (value) =>
+                        value == null || value.trim().isEmpty
+                            ? 'Wajib diisi.'
+                            : null,
               ),
               const SizedBox(height: 12),
               Row(
@@ -436,12 +454,13 @@ class _ChallengeFormSheetState extends State<_ChallengeFormSheet> {
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: _isSaving ? null : _save,
-                icon: _isSaving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save),
+                icon:
+                    _isSaving
+                        ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.save),
                 label: Text(widget.existingId == null ? 'Mulai' : 'Update'),
               ),
             ],
@@ -462,4 +481,98 @@ String? _positiveIntValidator(String? value) {
   final number = int.tryParse(value ?? '');
   if (number == null || number <= 0) return 'Masukkan angka valid.';
   return null;
+}
+
+/// Recalculate semua challenge aktif berdasarkan log gula harian.
+/// Dipanggil manual via tombol refresh atau otomatis setiap kali
+/// sugar log berubah.
+Future<void> recalculateActiveChallenges(
+  DocumentReference<Map<String, dynamic>> userDoc,
+) async {
+  final challengeCol = userDoc.collection('challenges');
+  final logCol = userDoc.collection('sugarLogs');
+
+  // Ambil semua challenge aktif
+  final activeChallenges =
+      await challengeCol.where('status', isEqualTo: 'active').get();
+
+  for (final doc in activeChallenges.docs) {
+    final data = doc.data();
+    final startDate = (data['startDate'] as Timestamp?)?.toDate();
+    final targetGram =
+        (data['dailyTargetGram'] as num?)?.toDouble() ??
+        AppConstants.defaultSugarTargetGram;
+    final durationDays = (data['durationDays'] as num?)?.toInt() ?? 7;
+
+    if (startDate == null) continue;
+
+    // Ambil semua log sejak startDate
+    final logsSnap =
+        await logCol
+            .where(
+              'loggedAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startDate),
+            )
+            .get();
+
+    // Kelompokkan log per hari (format: yyyy-MM-dd)
+    final Map<String, double> sugarPerDay = {};
+    for (final log in logsSnap.docs) {
+      final logData = log.data();
+      final loggedAt = (logData['loggedAt'] as Timestamp?)?.toDate();
+      if (loggedAt == null) continue;
+      final dayKey = DateFormat('yyyy-MM-dd').format(loggedAt);
+      final sugar = (logData['sugarGram'] as num?)?.toDouble() ?? 0.0;
+      sugarPerDay[dayKey] = (sugarPerDay[dayKey] ?? 0.0) + sugar;
+    }
+
+    // Tentukan hari berhasil dan gagal
+    final now = DateTime.now();
+    final List<String> credited = [];
+    final List<String> failed = [];
+
+    for (int i = 0; i < durationDays; i++) {
+      final day = startDate.add(Duration(days: i));
+      if (day.isAfter(now)) break; // belum sampai hari ini
+      final dayKey = DateFormat('yyyy-MM-dd').format(day);
+      final totalSugar = sugarPerDay[dayKey] ?? -1;
+
+      if (totalSugar < 0) continue; // belum ada log hari itu, skip
+      if (totalSugar <= targetGram) {
+        credited.add(dayKey);
+      } else {
+        failed.add(dayKey);
+      }
+    }
+
+    final newStatus = credited.length >= durationDays ? 'completed' : 'active';
+
+    // Ambil progressDays sebelumnya untuk deteksi perubahan
+    final prevProgress = (data['progressDays'] as num?)?.toInt() ?? 0;
+    final prevStatus = data['status']?.toString() ?? 'active';
+
+    await doc.reference.update({
+      'creditedDates': credited,
+      'failedDates': failed,
+      'progressDays': credited.length,
+      'status': newStatus,
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (newStatus == 'completed') 'completedAt': FieldValue.serverTimestamp(),
+    });
+
+    final title = data['title']?.toString() ?? 'Challenge';
+
+    // Notif: challenge baru saja selesai
+    if (newStatus == 'completed' && prevStatus != 'completed') {
+      await NotificationService.instance.showChallengeCompleted(title);
+    }
+    // Notif: streak bertambah hari ini
+    else if (credited.length > prevProgress) {
+      await NotificationService.instance.showChallengeStreakSuccess(
+        title,
+        credited.length,
+        durationDays,
+      );
+    }
+  }
 }

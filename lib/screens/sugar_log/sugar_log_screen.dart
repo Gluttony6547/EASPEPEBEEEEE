@@ -76,11 +76,12 @@ class SugarLogScreen extends StatelessWidget {
                 for (final doc in docs) ...[
                   _SugarLogTile(
                     data: doc.data(),
-                    onEdit: () => _showLogForm(
-                      context,
-                      existingId: doc.id,
-                      existingData: doc.data(),
-                    ),
+                    onEdit:
+                        () => _showLogForm(
+                          context,
+                          existingId: doc.id,
+                          existingData: doc.data(),
+                        ),
                     onDelete: () => _deleteLog(context, doc.id),
                   ),
                   const SizedBox(height: 10),
@@ -130,34 +131,38 @@ class SugarLogScreen extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _SugarLogFormSheet(
-        userDoc: _userDoc,
-        logs: _logs,
-        existingId: existingId,
-        existingData: existingData,
-        product: product,
-      ),
+      builder:
+          (context) => _SugarLogFormSheet(
+            userDoc: _userDoc,
+            logs: _logs,
+            existingId: existingId,
+            existingData: existingData,
+            product: product,
+          ),
     );
   }
 
   Future<void> _deleteLog(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus log gula?'),
-        content: const Text('Data konsumsi ini akan dihapus dari Firestore.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Hapus log gula?'),
+            content: const Text(
+              'Data konsumsi ini akan dihapus dari Firestore.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                icon: const Icon(Icons.delete),
+                label: const Text('Hapus'),
+              ),
+            ],
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.delete),
-            label: const Text('Hapus'),
-          ),
-        ],
-      ),
     );
     if (confirmed == true) {
       await _logs.doc(id).delete();
@@ -176,9 +181,10 @@ class _DailySugarCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ratio = target <= 0 ? 0.0 : (total / target).clamp(0.0, 1.0);
     final overTarget = total > target;
-    final color = overTarget
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.primary;
+    final color =
+        overTarget
+            ? Theme.of(context).colorScheme.error
+            : Theme.of(context).colorScheme.primary;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -414,9 +420,8 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
     );
     final existingDate = (data['date'] as Timestamp?)?.toDate();
     final now = DateTime.now();
-    _date = existingDate == null || existingDate.isAfter(now)
-        ? now
-        : existingDate;
+    _date =
+        existingDate == null || existingDate.isAfter(now) ? now : existingDate;
   }
 
   @override
@@ -437,9 +442,10 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
       final suggestedSugar = widget.product?.suggestedSugarGram;
       final previousManualAdjusted =
           widget.existingData?['manualAdjusted'] == true;
-      final manualAdjusted = widget.product == null
-          ? previousManualAdjusted
-          : _isManualAdjustment(sugar, suggestedSugar);
+      final manualAdjusted =
+          widget.product == null
+              ? previousManualAdjusted
+              : _isManualAdjustment(sugar, suggestedSugar);
 
       final payload = {
         'date': Timestamp.fromDate(_date),
@@ -448,9 +454,10 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
         'barcode': _barcodeController.text.trim(),
         'sugarGram': sugar,
         'serving': _servingController.text.trim(),
-        'source': widget.product == null
-            ? (widget.existingData?['source']?.toString() ?? 'manual')
-            : 'barcode',
+        'source':
+            widget.product == null
+                ? (widget.existingData?['source']?.toString() ?? 'manual')
+                : 'barcode',
         'nutritionSource':
             widget.product?.source ??
             widget.existingData?['nutritionSource']?.toString() ??
@@ -498,9 +505,8 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
     final target =
         (profile['dailySugarTargetGram'] as num?)?.toDouble() ??
         AppConstants.defaultSugarTargetGram;
-    final query = await widget.logs
-        .where('dayKey', isEqualTo: dayKey(_date))
-        .get();
+    final query =
+        await widget.logs.where('dayKey', isEqualTo: dayKey(_date)).get();
     final total = totalSugarForDay(
       query.docs.map((doc) => doc.data()),
       dayKey(_date),
@@ -552,9 +558,11 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
                   labelText: 'Nama produk/makanan',
                   prefixIcon: Icon(Icons.fastfood_outlined),
                 ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Wajib diisi.'
-                    : null,
+                validator:
+                    (value) =>
+                        value == null || value.trim().isEmpty
+                            ? 'Wajib diisi.'
+                            : null,
               ),
               const SizedBox(height: 12),
               Row(
@@ -580,10 +588,11 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
                         labelText: 'Serving',
                         prefixIcon: Icon(Icons.flatware),
                       ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Wajib diisi.'
-                          : null,
+                      validator:
+                          (value) =>
+                              value == null || value.trim().isEmpty
+                                  ? 'Wajib diisi.'
+                                  : null,
                     ),
                   ),
                 ],
@@ -606,12 +615,13 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: _isSaving ? null : _save,
-                icon: _isSaving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save),
+                icon:
+                    _isSaving
+                        ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.save),
                 label: Text(widget.existingId == null ? 'Simpan' : 'Update'),
               ),
             ],
@@ -647,10 +657,11 @@ Future<void> recalculateActiveChallenges(
     totalsByDay[key] = (totalsByDay[key] ?? 0) + sugar;
   }
 
-  final challenges = await userDoc
-      .collection('challenges')
-      .where('status', isEqualTo: 'active')
-      .get();
+  final challenges =
+      await userDoc
+          .collection('challenges')
+          .where('status', isEqualTo: 'active')
+          .get();
   for (final doc in challenges.docs) {
     final data = doc.data();
     final startDate =

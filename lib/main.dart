@@ -14,7 +14,7 @@ import 'app_constants.dart';
 import 'firebase_options.dart';
 import 'navigation_shell.dart';
 import 'screens/auth_screen.dart';
-import 'screens/challenge_screen.dart';
+import 'screens/challenge/challenge_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/risk_screen.dart';
