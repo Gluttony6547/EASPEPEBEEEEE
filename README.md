@@ -7,7 +7,7 @@ Judul: `Fix sugar log layout and portrait orientation`
 
 <img width="369" height="821" alt="image" src="https://github.com/user-attachments/assets/8d0c470e-9c1f-477c-8032-67761248e628" />
 <img width="371" height="823" alt="image" src="https://github.com/user-attachments/assets/e42117b1-02e2-4ca0-9ff7-6861ed04c4d5" />
-<img width="339" height="744" alt="image" src="https://github.com/user-attachments/assets/9a6dd7d0-1c7a-4947-8782-be120df7ad8e" />
+<img width="378" height="830" alt="image" src="https://github.com/user-attachments/assets/6fcb3b2f-51a2-4dae-9601-27521032f6ff" />
 <img width="371" height="835" alt="image" src="https://github.com/user-attachments/assets/7ee77f58-3b4b-4d4d-89b7-ed01b642fe6f" />
 
 ## Ringkasan
