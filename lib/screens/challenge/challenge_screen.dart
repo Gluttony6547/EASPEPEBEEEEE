@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../app_constants.dart';
-import '../sugar_log_screen.dart';
 
 class ChallengeScreen extends StatelessWidget {
   const ChallengeScreen({super.key, required this.user});
@@ -462,4 +461,76 @@ String? _positiveIntValidator(String? value) {
   final number = int.tryParse(value ?? '');
   if (number == null || number <= 0) return 'Masukkan angka valid.';
   return null;
+}
+
+/// Recalculate semua challenge aktif berdasarkan log gula harian.
+/// Dipanggil manual via tombol refresh atau otomatis setiap kali
+/// sugar log berubah.
+Future<void> recalculateActiveChallenges(
+  DocumentReference<Map<String, dynamic>> userDoc,
+) async {
+  final challengeCol = userDoc.collection('challenges');
+  final logCol = userDoc.collection('sugarLogs');
+
+  // Ambil semua challenge aktif
+  final activeChallenges = await challengeCol
+      .where('status', isEqualTo: 'active')
+      .get();
+
+  for (final doc in activeChallenges.docs) {
+    final data = doc.data();
+    final startDate = (data['startDate'] as Timestamp?)?.toDate();
+    final targetGram = (data['dailyTargetGram'] as num?)?.toDouble()
+        ?? AppConstants.defaultSugarTargetGram;
+    final durationDays = (data['durationDays'] as num?)?.toInt() ?? 7;
+
+    if (startDate == null) continue;
+
+    // Ambil semua log sejak startDate
+    final logsSnap = await logCol
+        .where('loggedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+        .get();
+
+    // Kelompokkan log per hari (format: yyyy-MM-dd)
+    final Map<String, double> sugarPerDay = {};
+    for (final log in logsSnap.docs) {
+      final logData = log.data();
+      final loggedAt = (logData['loggedAt'] as Timestamp?)?.toDate();
+      if (loggedAt == null) continue;
+      final dayKey = DateFormat('yyyy-MM-dd').format(loggedAt);
+      final sugar = (logData['sugarGram'] as num?)?.toDouble() ?? 0.0;
+      sugarPerDay[dayKey] = (sugarPerDay[dayKey] ?? 0.0) + sugar;
+    }
+
+    // Tentukan hari berhasil dan gagal
+    final now = DateTime.now();
+    final List<String> credited = [];
+    final List<String> failed = [];
+
+    for (int i = 0; i < durationDays; i++) {
+      final day = startDate.add(Duration(days: i));
+      if (day.isAfter(now)) break; // belum sampai hari ini
+      final dayKey = DateFormat('yyyy-MM-dd').format(day);
+      final totalSugar = sugarPerDay[dayKey] ?? -1;
+
+      if (totalSugar < 0) continue; // belum ada log hari itu, skip
+      if (totalSugar <= targetGram) {
+        credited.add(dayKey);
+      } else {
+        failed.add(dayKey);
+      }
+    }
+
+    final newStatus = credited.length >= durationDays ? 'completed' : 'active';
+
+    await doc.reference.update({
+      'creditedDates': credited,
+      'failedDates': failed,
+      'progressDays': credited.length,
+      'status': newStatus,
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (newStatus == 'completed')
+        'completedAt': FieldValue.serverTimestamp(),
+    });
+  }
 }
