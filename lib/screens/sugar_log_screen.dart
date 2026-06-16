@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
+import 'barcode_scanner_screen.dart';
 import '../app_constants.dart';
 import '../domain/health_logic.dart';
 import '../services/notification_service.dart';
@@ -93,9 +93,11 @@ class SugarLogScreen extends StatelessWidget {
   }
 
   Future<void> _startBarcodeLookup(BuildContext context) async {
-    final barcode = await showDialog<String>(
-      context: context,
-      builder: (context) => _BarcodeDialog(),
+    final barcode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const BarcodeScannerScreen(),
+      ),
     );
     if (barcode == null || barcode.trim().isEmpty || !context.mounted) return;
 
