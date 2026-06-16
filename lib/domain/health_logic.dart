@@ -19,6 +19,7 @@ RiskResult calculateRisk({
   required double heightCm,
   required double weightKg,
   required int sugaryDrinksPerDay,
+  required String drinkIntensity,
   required int activityMinutesPerWeek,
   required bool familyHistory,
 }) {
@@ -26,44 +27,74 @@ RiskResult calculateRisk({
   final bmi = heightM <= 0 ? 0.0 : weightKg / (heightM * heightM);
   var score = 0;
 
-  if (age >= 35) score += 2;
+  // BMI
   if (bmi >= 30) {
-    score += 3;
+    score += 30;
   } else if (bmi >= 25) {
-    score += 2;
+    score += 20;
+  } else if (bmi >= 23) {
+    score += 8;
   }
-  if (sugaryDrinksPerDay >= 3) {
-    score += 3;
-  } else if (sugaryDrinksPerDay >= 1) {
-    score += 1;
-  }
-  if (activityMinutesPerWeek < 150) score += 2;
-  if (familyHistory) score += 3;
 
-  if (score >= 8) {
-    return RiskResult(
-      bmi: bmi,
-      score: score,
-      level: 'Tinggi',
-      recommendation:
-          'Kurangi minuman manis, tambah aktivitas fisik, dan konsultasi ke tenaga kesehatan.',
-    );
+  // Usia
+  if (age >= 45) {
+    score += 25;
+  } else if (age >= 35) {
+    score += 15;
+  } else if (age >= 25) {
+    score += 5;
   }
-  if (score >= 4) {
-    return RiskResult(
-      bmi: bmi,
-      score: score,
-      level: 'Sedang',
-      recommendation:
-          'Mulai pantau konsumsi gula harian dan pertahankan aktivitas minimal 150 menit per minggu.',
-    );
+
+  final intensityMultiplier = switch (drinkIntensity) {
+    'berat' => 3,
+    'sedang' => 2,
+    _ => 1,
+  };
+  score += sugaryDrinksPerDay * intensityMultiplier * 5;
+
+  if (activityMinutesPerWeek < 60) {
+    score += 25;
+  } else if (activityMinutesPerWeek < 150) {
+    score += 12;
   }
+
+  if (familyHistory) score += 20;
+
+  final String level;
+  final String recommendation;
+
+  if (score >= 70) {
+    level = 'Sangat Tinggi';
+    recommendation =
+    'Segera konsultasi ke dokter dan lakukan skrining HbA1c. '
+        'Kurangi drastis minuman manis dan tingkatkan aktivitas fisik.';
+  } else if (score >= 45) {
+    level = 'Tinggi';
+    recommendation =
+    'Batasi minuman manis maksimal 1x sehari, '
+        'mulai olahraga teratur, dan cek gula darah setahun sekali.';
+  } else if (score >= 25) {
+    level = 'Sedang';
+    recommendation =
+    'Pantau konsumsi gula harian, biasakan olahraga ringan '
+        '3x seminggu, dan perbanyak serat dari sayur dan buah.';
+  } else if (score >= 10) {
+    level = 'Rendah';
+    recommendation =
+    'Pertahankan pola makan seimbang, batasi minuman manis, '
+        'dan tetap aktif bergerak minimal 150 menit per minggu.';
+  } else {
+    level = 'Sangat Rendah';
+    recommendation =
+    'Pertahankan gaya hidup sehat dan tetap rutin cek '
+        'kesehatan tahunan.';
+  }
+
   return RiskResult(
-    bmi: bmi,
+    bmi: double.parse(bmi.toStringAsFixed(1)),
     score: score,
-    level: 'Rendah',
-    recommendation:
-        'Pertahankan pola makan seimbang dan tetap cek kebiasaan minuman manis.',
+    level: level,
+    recommendation: recommendation,
   );
 }
 
