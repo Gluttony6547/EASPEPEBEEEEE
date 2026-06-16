@@ -74,6 +74,7 @@ class RiskScreen extends StatelessWidget {
     final drinkCtrl = TextEditingController(text: '${existingData?['sugaryDrinksPerDay'] ?? 1}');
     final activityCtrl = TextEditingController(text: '${existingData?['activityMinutesPerWeek'] ?? 120}');
     var familyHistory = existingData?['familyHistory'] == true;
+    var drinkIntensity = existingData?['drinkIntensity'] ?? 'ringan';
     var isSaving = false;
 
     showModalBottomSheet(
@@ -116,6 +117,26 @@ class RiskScreen extends StatelessWidget {
                     decoration: const InputDecoration(labelText: 'Minuman manis per hari'),
                   ),
                   const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: drinkIntensity,
+                    decoration: const InputDecoration(labelText: 'Tingkat kemanisan'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'ringan',
+                        child: Text('Ringan\nseperti: Yogurt plain, Susu tawar, Teh tawar'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'sedang',
+                        child: Text('Sedang\nseperti: Teh manis, Jus buah, Susu cokelat'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'berat',
+                        child: Text('Berat\nseperti: Boba, Milkshake, Thai tea'),
+                      ),
+                    ],
+                    onChanged: (v) => setModalState(() => drinkIntensity = v!),
+                  ),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: activityCtrl,
                     keyboardType: TextInputType.number,
@@ -145,6 +166,7 @@ class RiskScreen extends StatelessWidget {
                         heightCm: height,
                         weightKg: weight,
                         sugaryDrinksPerDay: drinks,
+                        drinkIntensity: drinkIntensity,
                         activityMinutesPerWeek: activity,
                         familyHistory: familyHistory,
                       );
@@ -154,6 +176,7 @@ class RiskScreen extends StatelessWidget {
                         'heightCm': height,
                         'weightKg': weight,
                         'sugaryDrinksPerDay': drinks,
+                        'drinkIntensity': drinkIntensity,
                         'activityMinutesPerWeek': activity,
                         'familyHistory': familyHistory,
                         'bmi': result.bmi,
