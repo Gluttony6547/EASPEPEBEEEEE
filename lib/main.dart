@@ -14,38 +14,59 @@ import 'app_constants.dart';
 import 'firebase_options.dart';
 import 'navigation_shell.dart';
 import 'screens/auth_screen.dart';
-import 'screens/challenge_screen.dart';
+import 'screens/challenge/challenge_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/risk_screen.dart';
-import 'screens/sugar_log_screen.dart';
+import 'screens/sugar_log/sugar_log_screen.dart';
 import 'services/notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (_) {}
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  print('>>> 1: ensureInitialized done');
+
   await initializeDateFormatting('id_ID');
+  print('>>> 2: initializeDateFormatting done');
+
   Intl.defaultLocale = 'id_ID';
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    print('>>> Firebase already initialized: $e');
+  }
+  print('>>> 3: Firebase.initializeApp done');
 
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
+  print('>>> 4: Crashlytics setup done');
 
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await NotificationService.instance.initialize();
+  print('>>> 5: background handler registered');
 
-  runApp(const GulaDarahkuApp());
+  await NotificationService.instance.initialize();
+  print('>>> 6: NotificationService done');
+
+  runApp(const SugarPalsApp());
+  print('>>> 7: runApp called');
 }
 
-class GulaDarahkuApp extends StatelessWidget {
-  const GulaDarahkuApp({super.key});
+class SugarPalsApp extends StatelessWidget {
+  const SugarPalsApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +139,7 @@ class _ProfileGateState extends State<ProfileGate> {
         if (data == null || data['profileCompleted'] != true) {
           return OnboardingScreen(user: widget.user);
         }
-        return GulaNavigationShell(
+        return SugarPalsNavigationShell(
           tabs: [
             NavigationTab(
               label: 'Beranda',

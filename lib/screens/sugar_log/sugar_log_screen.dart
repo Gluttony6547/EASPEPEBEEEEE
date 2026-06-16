@@ -3,10 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../app_constants.dart';
-import '../domain/health_logic.dart';
-import '../services/notification_service.dart';
-import '../services/open_food_facts_service.dart';
+import '../../app_constants.dart';
+import '../../domain/health_logic.dart';
+import '../../services/notification_service.dart';
+import '../../services/nutrition_lookup_service.dart';
 
 class SugarLogScreen extends StatelessWidget {
   const SugarLogScreen({super.key, required this.user});
@@ -76,11 +76,12 @@ class SugarLogScreen extends StatelessWidget {
                 for (final doc in docs) ...[
                   _SugarLogTile(
                     data: doc.data(),
-                    onEdit: () => _showLogForm(
-                      context,
-                      existingId: doc.id,
-                      existingData: doc.data(),
-                    ),
+                    onEdit:
+                        () => _showLogForm(
+                          context,
+                          existingId: doc.id,
+                          existingData: doc.data(),
+                        ),
                     onDelete: () => _deleteLog(context, doc.id),
                   ),
                   const SizedBox(height: 10),
@@ -98,10 +99,16 @@ class SugarLogScreen extends StatelessWidget {
       builder: (context) => _BarcodeDialog(),
     );
     if (barcode == null || barcode.trim().isEmpty || !context.mounted) return;
+    if (!isValidNutritionBarcode(barcode)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Barcode harus 8-14 digit angka.')),
+      );
+      return;
+    }
 
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final product = await OpenFoodFactsService().fetchProduct(barcode);
+      final product = await NutritionLookupService().fetchProduct(barcode);
       if (!context.mounted) return;
       if (product == null) {
         messenger.showSnackBar(
@@ -119,39 +126,43 @@ class SugarLogScreen extends StatelessWidget {
     BuildContext context, {
     String? existingId,
     Map<String, dynamic>? existingData,
-    FoodProduct? product,
+    NutritionProduct? product,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _SugarLogFormSheet(
-        userDoc: _userDoc,
-        logs: _logs,
-        existingId: existingId,
-        existingData: existingData,
-        product: product,
-      ),
+      builder:
+          (context) => _SugarLogFormSheet(
+            userDoc: _userDoc,
+            logs: _logs,
+            existingId: existingId,
+            existingData: existingData,
+            product: product,
+          ),
     );
   }
 
   Future<void> _deleteLog(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus log gula?'),
-        content: const Text('Data konsumsi ini akan dihapus dari Firestore.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Hapus log gula?'),
+            content: const Text(
+              'Data konsumsi ini akan dihapus dari Firestore.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                icon: const Icon(Icons.delete),
+                label: const Text('Hapus'),
+              ),
+            ],
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.delete),
-            label: const Text('Hapus'),
-          ),
-        ],
-      ),
     );
     if (confirmed == true) {
       await _logs.doc(id).delete();
@@ -170,9 +181,10 @@ class _DailySugarCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ratio = target <= 0 ? 0.0 : (total / target).clamp(0.0, 1.0);
     final overTarget = total > target;
-    final color = overTarget
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.primary;
+    final color =
+        overTarget
+            ? Theme.of(context).colorScheme.error
+            : Theme.of(context).colorScheme.primary;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -232,31 +244,64 @@ class _SugarLogTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final date = (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
     final sugar = (data['sugarGram'] as num?)?.toDouble() ?? 0;
+    final confidence = (data['nutritionConfidence'] as num?)?.toDouble();
+    final needsReview = data['needsNutritionReview'] == true;
+    final manualAdjusted = data['manualAdjusted'] == true;
+    final source = _nutritionSourceLabel(
+      data['nutritionSource']?.toString() ?? data['source']?.toString(),
+    );
+
     return Card(
-      child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.local_cafe_outlined)),
-        title: Text(data['productName']?.toString() ?? 'Produk'),
-        subtitle: Text(
-          '${DateFormat('d MMM yyyy').format(date)} - ${data['source'] ?? 'manual'}',
-        ),
-        trailing: Wrap(
-          spacing: 4,
-          children: [
-            Text(
-              '${sugar.toStringAsFixed(1)}g',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            IconButton(
-              tooltip: 'Edit',
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              tooltip: 'Hapus',
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ],
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: ListTile(
+          leading: const CircleAvatar(child: Icon(Icons.local_cafe_outlined)),
+          title: Text(data['productName']?.toString() ?? 'Produk'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${DateFormat('d MMM yyyy').format(date)} - $source'),
+              if (confidence != null)
+                Text('Confidence ${(confidence * 100).round()}%'),
+              if (needsReview || manualAdjusted)
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    if (needsReview)
+                      const Chip(
+                        label: Text('Perlu cek'),
+                        avatar: Icon(Icons.warning_amber, size: 18),
+                      ),
+                    if (manualAdjusted)
+                      const Chip(
+                        label: Text('Manual'),
+                        avatar: Icon(Icons.edit_note, size: 18),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+          trailing: Wrap(
+            spacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '${sugar.toStringAsFixed(1)}g',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              IconButton(
+                tooltip: 'Edit',
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              IconButton(
+                tooltip: 'Hapus',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -284,7 +329,7 @@ class _EmptySugarState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Tambah manual atau cari produk dari barcode Open Food Facts.',
+            'Tambah manual atau cari produk dari barcode.',
             textAlign: TextAlign.center,
           ),
         ],
@@ -338,7 +383,7 @@ class _SugarLogFormSheet extends StatefulWidget {
   final CollectionReference<Map<String, dynamic>> logs;
   final String? existingId;
   final Map<String, dynamic>? existingData;
-  final FoodProduct? product;
+  final NutritionProduct? product;
 
   @override
   State<_SugarLogFormSheet> createState() => _SugarLogFormSheetState();
@@ -373,7 +418,10 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
     _servingController = TextEditingController(
       text: data['serving']?.toString() ?? '1 porsi',
     );
-    _date = (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final existingDate = (data['date'] as Timestamp?)?.toDate();
+    final now = DateTime.now();
+    _date =
+        existingDate == null || existingDate.isAfter(now) ? now : existingDate;
   }
 
   @override
@@ -389,34 +437,67 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 
-    final payload = {
-      'date': Timestamp.fromDate(_date),
-      'dayKey': dayKey(_date),
-      'productName': _productController.text.trim(),
-      'barcode': _barcodeController.text.trim(),
-      'sugarGram': double.parse(_sugarController.text),
-      'serving': _servingController.text.trim(),
-      'source':
-          widget.product == null &&
-              (widget.existingData?['source']?.toString() != 'open_food_facts')
-          ? 'manual'
-          : 'open_food_facts',
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    try {
+      final sugar = _parseLocalizedDouble(_sugarController.text)!;
+      final suggestedSugar = widget.product?.suggestedSugarGram;
+      final previousManualAdjusted =
+          widget.existingData?['manualAdjusted'] == true;
+      final manualAdjusted =
+          widget.product == null
+              ? previousManualAdjusted
+              : _isManualAdjustment(sugar, suggestedSugar);
 
-    if (widget.existingId == null) {
-      await widget.logs.add({
-        ...payload,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } else {
-      await widget.logs.doc(widget.existingId).update(payload);
+      final payload = {
+        'date': Timestamp.fromDate(_date),
+        'dayKey': dayKey(_date),
+        'productName': _productController.text.trim(),
+        'barcode': _barcodeController.text.trim(),
+        'sugarGram': sugar,
+        'serving': _servingController.text.trim(),
+        'source':
+            widget.product == null
+                ? (widget.existingData?['source']?.toString() ?? 'manual')
+                : 'barcode',
+        'nutritionSource':
+            widget.product?.source ??
+            widget.existingData?['nutritionSource']?.toString() ??
+            widget.existingData?['source']?.toString() ??
+            'manual',
+        'nutritionConfidence':
+            widget.product?.confidence ??
+            (widget.existingData?['nutritionConfidence'] as num?)?.toDouble(),
+        'needsNutritionReview':
+            widget.product?.needsReview ??
+            (widget.existingData?['needsNutritionReview'] == true),
+        'manualAdjusted': manualAdjusted,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (widget.existingId == null) {
+        await widget.logs.add({
+          ...payload,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await widget.logs.doc(widget.existingId).update(payload);
+      }
+
+      await recalculateActiveChallenges(widget.userDoc);
+      await _maybeShowWarning();
+
+      if (mounted) Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
 
-    await recalculateActiveChallenges(widget.userDoc);
-    await _maybeShowWarning();
-
-    if (mounted) Navigator.pop(context);
+  bool _isManualAdjustment(double sugar, double? suggestedSugar) {
+    return suggestedSugar != null && (sugar - suggestedSugar).abs() > 0.05;
   }
 
   Future<void> _maybeShowWarning() async {
@@ -424,9 +505,8 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
     final target =
         (profile['dailySugarTargetGram'] as num?)?.toDouble() ??
         AppConstants.defaultSugarTargetGram;
-    final query = await widget.logs
-        .where('dayKey', isEqualTo: dayKey(_date))
-        .get();
+    final query =
+        await widget.logs.where('dayKey', isEqualTo: dayKey(_date)).get();
     final total = totalSugarForDay(
       query.docs.map((doc) => doc.data()),
       dayKey(_date),
@@ -457,7 +537,19 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
               ),
               if (widget.product != null) ...[
                 const SizedBox(height: 8),
-                Text('Open Food Facts: ${widget.product!.brand}'),
+                Text(
+                  '${widget.product!.sourceLabel}: ${widget.product!.brand}',
+                ),
+                Text(
+                  'Confidence ${(widget.product!.confidence * 100).round()}%',
+                ),
+                if (widget.product!.needsReview)
+                  Text(
+                    'Data antar-sumber perlu dicek ulang sebelum disimpan.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
               ],
               const SizedBox(height: 16),
               TextFormField(
@@ -466,9 +558,11 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
                   labelText: 'Nama produk/makanan',
                   prefixIcon: Icon(Icons.fastfood_outlined),
                 ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Wajib diisi.'
-                    : null,
+                validator:
+                    (value) =>
+                        value == null || value.trim().isEmpty
+                            ? 'Wajib diisi.'
+                            : null,
               ),
               const SizedBox(height: 12),
               Row(
@@ -476,7 +570,9 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
                   Expanded(
                     child: TextFormField(
                       controller: _sugarController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
                         labelText: 'Gula (gram)',
                         prefixIcon: Icon(Icons.scale_outlined),
@@ -492,10 +588,11 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
                         labelText: 'Serving',
                         prefixIcon: Icon(Icons.flatware),
                       ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Wajib diisi.'
-                          : null,
+                      validator:
+                          (value) =>
+                              value == null || value.trim().isEmpty
+                                  ? 'Wajib diisi.'
+                                  : null,
                     ),
                   ),
                 ],
@@ -518,12 +615,13 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: _isSaving ? null : _save,
-                icon: _isSaving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save),
+                icon:
+                    _isSaving
+                        ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.save),
                 label: Text(widget.existingId == null ? 'Simpan' : 'Update'),
               ),
             ],
@@ -538,7 +636,7 @@ class _SugarLogFormSheetState extends State<_SugarLogFormSheet> {
       context: context,
       initialDate: _date,
       firstDate: DateTime(2024),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: DateTime.now(),
     );
     if (selected != null) setState(() => _date = selected);
   }
@@ -559,10 +657,11 @@ Future<void> recalculateActiveChallenges(
     totalsByDay[key] = (totalsByDay[key] ?? 0) + sugar;
   }
 
-  final challenges = await userDoc
-      .collection('challenges')
-      .where('status', isEqualTo: 'active')
-      .get();
+  final challenges =
+      await userDoc
+          .collection('challenges')
+          .where('status', isEqualTo: 'active')
+          .get();
   for (final doc in challenges.docs) {
     final data = doc.data();
     final startDate =
@@ -590,7 +689,32 @@ Future<void> recalculateActiveChallenges(
 }
 
 String? _positiveNumberValidator(String? value) {
-  final number = double.tryParse(value ?? '');
-  if (number == null || number < 0) return 'Masukkan angka valid.';
+  final number = _parseLocalizedDouble(value);
+  if (number == null || number <= 0) return 'Masukkan angka valid.';
   return null;
+}
+
+double? _parseLocalizedDouble(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) return null;
+  return double.tryParse(text.replaceAll(',', '.'));
+}
+
+String _nutritionSourceLabel(String? source) {
+  return (source ?? 'manual')
+      .split('+')
+      .map(
+        (item) => switch (item) {
+          'c0r' => 'c0r.ai',
+          'calorie_api' => 'CalorieAPI',
+          'usda_fdc' => 'USDA FDC',
+          'edamam' => 'Edamam',
+          'open_food_facts' => 'Open Food Facts',
+          'open_food_facts_client' => 'Open Food Facts',
+          'barcode' => 'Barcode',
+          'manual' => 'Manual',
+          _ => item,
+        },
+      )
+      .join(' + ');
 }

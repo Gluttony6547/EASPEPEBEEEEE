@@ -14,8 +14,8 @@ class NavigationTab {
   final Widget child;
 }
 
-class GulaNavigationShell extends StatefulWidget {
-  const GulaNavigationShell({
+class SugarPalsNavigationShell extends StatefulWidget {
+  const SugarPalsNavigationShell({
     super.key,
     required this.tabs,
     this.initialIndex = 0,
@@ -25,10 +25,10 @@ class GulaNavigationShell extends StatefulWidget {
   final int initialIndex;
 
   @override
-  State<GulaNavigationShell> createState() => _GulaNavigationShellState();
+  State<SugarPalsNavigationShell> createState() => _SugarPalsNavigationShellState();
 }
 
-class _GulaNavigationShellState extends State<GulaNavigationShell> {
+class _SugarPalsNavigationShellState extends State<SugarPalsNavigationShell> {
   late int _index = widget.initialIndex;
 
   @override
