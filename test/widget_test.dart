@@ -1,30 +1,39 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:sugarpals/main.dart';
+import 'package:sugarpals/app_constants.dart';
+import 'package:sugarpals/domain/health_logic.dart';
+import 'package:sugarpals/services/open_food_facts_service.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('default health targets are available', () {
+    expect(AppConstants.defaultSugarTargetGram, 50);
+    expect(AppConstants.defaultWeeklyExerciseTargetMinutes, 150);
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('localized decimal parser accepts comma and dot', () {
+    expect(parseLocalizedDouble('1,5'), 1.5);
+    expect(parseLocalizedDouble('1.5'), 1.5);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  test('Open Food Facts parser reads root sugar fields', () {
+    const body = '''
+{
+  "code": "3017620422003",
+  "status": 1,
+  "product": {
+    "code": "3017620422003",
+    "product_name": "Nutella",
+    "brands": "Nutella, Yum yum",
+    "serving_size_imported": "15 g (15)",
+    "sugars_100g": 56.3
+  }
+}
+''';
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    final product = parseOpenFoodFactsProduct(body, '3017620422003');
+
+    expect(product, isNotNull);
+    expect(product!.name, 'Nutella');
+    expect(product.sugarPer100g, 56.3);
+    expect(product.sugarPerServing, closeTo(8.445, 0.001));
   });
 }

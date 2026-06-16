@@ -213,7 +213,7 @@ class RiskScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: drinkIntensity,
+                    initialValue: drinkIntensity,
                     decoration: const InputDecoration(labelText: 'Tingkat kemanisan'),
                     items: [
                       DropdownMenuItem(

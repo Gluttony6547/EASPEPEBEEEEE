@@ -38,17 +38,28 @@ class _GulaNavigationShellState extends State<GulaNavigationShell> {
         index: _index,
         children: widget.tabs.map((tab) => tab.child).toList(),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (index) => setState(() => _index = index),
-        destinations: [
-          for (final tab in widget.tabs)
-            NavigationDestination(
-              icon: Icon(tab.icon),
-              selectedIcon: Icon(tab.selectedIcon),
-              label: tab.label,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: NavigationBar(
+              selectedIndex: _index,
+              onDestinationSelected: (index) => setState(() => _index = index),
+              backgroundColor: const Color(0xFFFFFCF6),
+              indicatorColor: const Color(0xFFE1F1E8),
+              destinations: [
+                for (final tab in widget.tabs)
+                  NavigationDestination(
+                    icon: Icon(tab.icon),
+                    selectedIcon: Icon(tab.selectedIcon),
+                    label: tab.label,
+                  ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

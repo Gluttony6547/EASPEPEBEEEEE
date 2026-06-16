@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../app_constants.dart';
+import '../domain/health_logic.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.user});
@@ -21,6 +22,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _targetController = TextEditingController(
     text: AppConstants.defaultSugarTargetGram.toStringAsFixed(0),
   );
+  final _weeklyExerciseController = TextEditingController(
+    text: AppConstants.defaultWeeklyExerciseTargetMinutes.toStringAsFixed(0),
+  );
   var _isSaving = false;
 
   @override
@@ -29,6 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _heightController.dispose();
     _weightController.dispose();
     _targetController.dispose();
+    _weeklyExerciseController.dispose();
     super.dispose();
   }
 
@@ -36,21 +41,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 
-    final userDoc = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.user.uid);
-    await userDoc.set({
-      'email': widget.user.email,
-      'name': _nameController.text.trim(),
-      'heightCm': double.parse(_heightController.text),
-      'weightKg': double.parse(_weightController.text),
-      'dailySugarTargetGram': double.parse(_targetController.text),
-      'profileCompleted': true,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    if (mounted) setState(() => _isSaving = false);
+    try {
+      final userDoc = FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.user.uid);
+      await userDoc.set({
+        'email': widget.user.email,
+        'name': _nameController.text.trim(),
+        'heightCm': parseLocalizedDouble(_heightController.text)!,
+        'weightKg': parseLocalizedDouble(_weightController.text)!,
+        'dailySugarTargetGram': parseLocalizedDouble(_targetController.text)!,
+        'weeklyExerciseTargetMinutes': parseLocalizedDouble(
+          _weeklyExerciseController.text,
+        )!,
+        'profileCompleted': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -80,7 +95,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Data ini dipakai untuk kalkulator risiko dan target gula harian.',
+                  'Data ini dipakai untuk kalkulator risiko, target gula, dan progress olahraga.',
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
@@ -131,6 +146,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   validator: _positiveNumberValidator,
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _weeklyExerciseController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Target olahraga mingguan (menit)',
+                    prefixIcon: Icon(Icons.timeline_outlined),
+                  ),
+                  validator: _positiveNumberValidator,
+                ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: _isSaving ? null : _saveProfile,
@@ -152,7 +177,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 String? _positiveNumberValidator(String? value) {
-  final number = double.tryParse(value ?? '');
+  final number = parseLocalizedDouble(value);
   if (number == null || number <= 0) return 'Masukkan angka valid.';
   return null;
 }

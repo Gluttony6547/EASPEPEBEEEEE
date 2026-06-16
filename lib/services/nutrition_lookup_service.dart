@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'open_food_facts_service.dart';
@@ -68,7 +70,7 @@ class NutritionProduct {
       barcode: product.barcode,
       name: product.name,
       brand: product.brand,
-      serving: '1 porsi',
+      serving: product.serving,
       sugarPer100g: product.sugarPer100g,
       sugarPerServing: product.sugarPerServing,
       source: 'open_food_facts_client',
@@ -96,13 +98,16 @@ class NutritionLookupService {
 
     try {
       final callable = _functions.httpsCallable('lookupNutritionByBarcode');
-      final result = await callable.call<Map<String, dynamic>>({
-        'barcode': cleanBarcode,
-      });
+      final result = await callable
+          .call<Map<String, dynamic>>({'barcode': cleanBarcode})
+          .timeout(const Duration(seconds: 6));
       return NutritionProduct.fromCallableData(result.data);
     } on FirebaseFunctionsException catch (error) {
       if (error.code == 'invalid-argument') rethrow;
-      if (error.code == 'not-found') return null;
+      // If the proxy function is not deployed or a provider misses the item,
+      // still try the public Open Food Facts endpoint before giving up.
+      return _fetchOpenFoodFactsFallback(cleanBarcode);
+    } on TimeoutException {
       return _fetchOpenFoodFactsFallback(cleanBarcode);
     } catch (_) {
       return _fetchOpenFoodFactsFallback(cleanBarcode);
