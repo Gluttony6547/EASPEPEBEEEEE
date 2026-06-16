@@ -15,13 +15,37 @@ class RiskScreen extends StatelessWidget {
           .doc(user.uid)
           .collection('riskAssessments');
 
+  Future<void> _delete(BuildContext context, String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus?'),
+        content: const Text('Data ini akan dihapus.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _collection.doc(id).delete();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Kalkulator Risiko')),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showForm(context),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('Assessment'),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _collection.orderBy('createdAt', descending: true).snapshots(),
@@ -32,7 +56,7 @@ class RiskScreen extends StatelessWidget {
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) {
             return const Center(
-              child: Text('Belum ada data.'),
+              child: Text('Belum ada data. Tekan + untuk tambah.'),
             );
           }
           return ListView.builder(
@@ -41,21 +65,84 @@ class RiskScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final doc = docs[index];
               final data = doc.data();
+              final score = data['score'] ?? 0;
+              final level = data['level'] ?? '-';
+              final bmi = (data['bmi'] as num?)?.toDouble() ?? 0;
+
+              final color = switch (level) {
+                'Sangat Tinggi' || 'Tinggi' => Colors.red,
+                'Sedang' => Colors.orange,
+                _ => Colors.green,
+              };
+
               return Card(
-                child: ListTile(
-                  title: Text('Risiko ${data['level'] ?? '-'}'),
-                  subtitle: Text('Skor: ${data['score'] ?? 0}'),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _showForm(context, existingId: doc.id, existingData: data);
-                      } else if (value == 'delete') {
-                        _collection.doc(doc.id).delete();
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      const PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: color.withValues(alpha: 0.2),
+                            child: Icon(Icons.health_and_safety, color: color),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Risiko $level',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  'Skor: $score — BMI: ${bmi.toStringAsFixed(1)}',
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () => _showForm(
+                              context,
+                              existingId: doc.id,
+                              existingData: data,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () => _delete(context, doc.id),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(data['recommendation']?.toString() ?? ''),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          Chip(label: Text('Usia: ${data['age']}')),
+                          Chip(
+                            label: Text(
+                              'Minuman: ${data['sugaryDrinksPerDay']}x/hari (${data['drinkIntensity'] ?? '-'})',
+                            ),
+                          ),
+                          Chip(
+                            label: Text(
+                              'Aktivitas: ${data['activityMinutesPerWeek']} mnt/mgg',
+                            ),
+                          ),
+                          Chip(
+                            label: Text(
+                              data['familyHistory'] == true ? 'Riwayat keluarga' : 'Tanpa riwayat',
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -99,16 +186,24 @@ class RiskScreen extends StatelessWidget {
                     decoration: const InputDecoration(labelText: 'Usia'),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    controller: heightCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Tinggi (cm)'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: weightCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Berat (kg)'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: heightCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Tinggi (cm)'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: weightCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Berat (kg)'),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -120,18 +215,51 @@ class RiskScreen extends StatelessWidget {
                   DropdownButtonFormField<String>(
                     value: drinkIntensity,
                     decoration: const InputDecoration(labelText: 'Tingkat kemanisan'),
-                    items: const [
+                    items: [
                       DropdownMenuItem(
                         value: 'ringan',
-                        child: Text('Ringan\nseperti: Yogurt plain, Susu tawar, Teh tawar'),
+                        child: RichText(
+                          text: const TextSpan(
+                            style: TextStyle(color: Colors.black),
+                            children: [
+                              TextSpan(text: 'Ringan '),
+                              TextSpan(
+                                text: 'contoh: (teh manis, susu kotak)',
+                                style: TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'sedang',
-                        child: Text('Sedang\nseperti: Teh manis, Jus buah, Susu cokelat'),
+                        child: RichText(
+                          text: const TextSpan(
+                            style: TextStyle(color: Colors.black),
+                            children: [
+                              TextSpan(text: 'Sedang '),
+                              TextSpan(
+                                text: 'contoh: (soda, Thai tea)',
+                                style: TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       DropdownMenuItem(
                         value: 'berat',
-                        child: Text('Berat\nseperti: Boba, Milkshake, Thai tea'),
+                        child: RichText(
+                          text: const TextSpan(
+                            style: TextStyle(color: Colors.black),
+                            children: [
+                              TextSpan(text: 'Berat '),
+                              TextSpan(
+                                text: 'contoh: (boba, kopi susu)',
+                                style: TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                     onChanged: (v) => setModalState(() => drinkIntensity = v!),
