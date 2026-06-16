@@ -45,7 +45,6 @@ RiskResult calculateRisk({
     score += 5;
   }
 
-  // Minuman manis: frekuensi × intensitas × 5
   final intensityMultiplier = switch (drinkIntensity) {
     'berat' => 3,
     'sedang' => 2,
@@ -53,17 +52,14 @@ RiskResult calculateRisk({
   };
   score += sugaryDrinksPerDay * intensityMultiplier * 5;
 
-  // Aktivitas fisik
   if (activityMinutesPerWeek < 60) {
     score += 25;
   } else if (activityMinutesPerWeek < 150) {
     score += 12;
   }
 
-  // Riwayat keluarga
   if (familyHistory) score += 20;
 
-  // Level risiko
   final String level;
   final String recommendation;
 
